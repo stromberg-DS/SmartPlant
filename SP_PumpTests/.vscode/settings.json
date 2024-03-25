@@ -5,6 +5,5 @@
         "*.ino": "cpp"
     },
     "particle.firmwareVersion": "5.7.0",
-    "particle.targetPlatform": "p2",
-    "particle.targetDevice": ""
+    "particle.targetPlatform": "p2"
 }

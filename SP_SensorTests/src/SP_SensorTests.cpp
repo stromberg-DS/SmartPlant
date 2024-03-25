@@ -7,8 +7,8 @@
 #include "Particle.h"
 #include "math.h"
 #include <Air_Quality_Sensor.h>
-#include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
-#include "Adafruit_MQTT/Adafruit_MQTT.h"
+#include <Adafruit_MQTT/Adafruit_MQTT_SPARK.h>
+#include <Adafruit_MQTT/Adafruit_MQTT.h>
 #include "credentials.h"
 #include <Adafruit_BME280.h>
 #include <Adafruit_GFX.h>
@@ -47,7 +47,7 @@ Adafruit_MQTT_Publish airQualityText = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME
 Adafruit_SSD1306 display(OLED_RESET);
 Adafruit_BME280 bme;
 
-SYSTEM_MODE(SEMI_AUTOMATIC);
+SYSTEM_MODE(AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 
 //functions
