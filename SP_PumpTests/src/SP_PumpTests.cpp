@@ -1,35 +1,42 @@
 /* 
- * Project myProject
- * Author: Your Name
- * Date: 
- * For comprehensive documentation and examples, please visit:
- * https://docs.particle.io/firmware/best-practices/firmware-template/
- */
+ * Pump/Relay Tests
+ * Author: Daniel Stromberg
+ * Date: 3/25/2024
+*/
 
-// Include Particle Device OS APIs
 #include "Particle.h"
+#include <Button.h>
 
-// Let Device OS manage the connection to the Particle Cloud
-SYSTEM_MODE(AUTOMATIC);
+const int buttonPin = D2;
+const int pumpPin = D19;
+const int pumpOnTime = 2000;
 
-// Run the application and system concurrently in separate threads
+int currentMillis;
+int lastMillis = -9999;
+
+
+SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
 
-// Show system, cloud connectivity, and application logs over USB
-// View logs with CLI using 'particle serial monitor --follow'
-SerialLogHandler logHandler(LOG_LEVEL_INFO);
+Button moistureButton(buttonPin, true);
 
-// setup() runs once, when the device is first turned on
 void setup() {
-  // Put initialization like pinMode and begin functions here
+    Serial.begin(9600);
+    pinMode(pumpPin, OUTPUT);
 }
 
-// loop() runs over and over again, as quickly as it can execute.
 void loop() {
-  // The core of your code will likely live here.
+    currentMillis = millis();
+    int timeSinceLastPump = currentMillis - lastMillis;
 
-  // Example: Publish event to cloud every 10 seconds. Uncomment the next 3 lines to try it!
-  // Log.info("Sending Hello World to the cloud!");
-  // Particle.publish("Hello world!");
-  // delay( 10 * 1000 ); // milliseconds and blocking - see docs for more info!
+    if(moistureButton.isPressed()){
+        digitalWrite(pumpPin, HIGH);
+        lastMillis = currentMillis;
+        Serial.printf("Button!\n");
+    }
+
+    if(timeSinceLastPump > pumpOnTime){
+        digitalWrite(pumpPin, LOW);
+
+    }
 }
