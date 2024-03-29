@@ -28,18 +28,20 @@ const int DEGREE_SYMBOL = 0xF8;
 
 const int PUMP_PIN = D19;
 const int PUMP_ON_TIME = 500;
+const int PUMP_TIMEOUT = 5000;
 
 const int SENSOR_IN_WATER = 1744;     //when sensor is in pure pureWater
 const int SENSOR_IN_AIR = 3485;       //sensor value in air
 const int SENSOR_IN_WET_SOIL = 1770;   //sensor value in VERY wet sensor
 const int SENSOR_IN_DRY_SOIL = 3000;   //sensor value in dry soil
-const int MIN_WATERING_INTERVAL = 10000;    //Minimum time between watering.
 
 int currentMillis;
 int lastPumpTime = -9999;
+bool isPumpOn = false;
 
 int duration;
 int totalLowTime = 0;
+int lowPulseOccupancy = 0;
 int lastLowTime = 0;
 int lastSampleTime;
 float ratio = 0;
@@ -63,7 +65,7 @@ Adafruit_SSD1306 display(OLED_RESET);
 Adafruit_BME280 bme;
 
 
-SYSTEM_MODE(SEMI_AUTOMATIC);
+SYSTEM_MODE(AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 
 //functions
@@ -71,12 +73,15 @@ void updateDisplays();
 float tempCtoF(float c);
 void MQTT_connect();
 bool MQTT_ping();
+void getConc();
+
 
 void setup() {
     Serial.begin(9600);
     waitFor(Serial.isConnected, 10000);
 
     pinMode(PUMP_PIN, OUTPUT);
+    digitalWrite(PUMP_PIN, LOW);
     pinMode(SOIL_PIN, INPUT);
 
     status = bme.begin(BME_ADDRESS);
@@ -92,78 +97,71 @@ void setup() {
 
   pinMode(DUST_PIN, INPUT);
   lastSampleTime = millis();
+  new Thread("concThread", getConc);
 }
 
 void loop() {
     currentMillis = millis();
-    int quality = sensor.slope();
-    int timeSinceSample = currentMillis-lastSampleTime;
-    int timeSinceDisplay = currentMillis - lastDisplayTime;
+    // int quality = sensor.slope();
     int moistureLevel = analogRead(SOIL_PIN);
     int timeSinceLastPump = currentMillis - lastPumpTime;
 
-    if (timeSinceDisplay > 10000){
+    if (millis() - lastDisplayTime > 10000){
         tempF = tempCtoF(bme.readTemperature());
         humidity = bme.readHumidity();
         updateDisplays();
         lastDisplayTime = millis();
     }
 
-    duration = pulseIn(DUST_PIN, LOW);
-    totalLowTime = totalLowTime+duration;
+    //pulseIN is slowing me down!!! I need threading for this function!!!!
+    ///////////////////////////
 
-    if(timeSinceSample > SAMPLE_TIME_MS){
-        if(totalLowTime == 0){
-        totalLowTime = lastLowTime;
-        } else{
-        lastLowTime = totalLowTime;
-        }
 
-        ratio = totalLowTime/(SAMPLE_TIME_MS*10.0);
-        concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2)+520*ratio+0.62;
+    if(millis()-lastSampleTime > SAMPLE_TIME_MS){
+        // if(totalLowTime == 0){
+        // totalLowTime = lastLowTime;
+        // } else{
+        // lastLowTime = totalLowTime;
+        // }
+
         Serial.printf("Dust Concentration: %0.2f\n", concentration);
-
-        totalLowTime = 0;
         lastSampleTime = millis();
 
-        if(quality == 0){
-            Serial.printf("Extreme VOCs!\n");
-            warningText = "Extreme VOCs!";
-        }else if(quality == 1){
-            Serial.printf("High VOCs\n");
-            warningText = "High VOCs.";
-        } else if (quality == 2){
-            Serial.printf("Low VOCs\n");
-            warningText = "Low VOCs";
-        } else if(quality == 3){
-            Serial.printf("Clean Air!\n");
-            warningText = "Fresh Air!";
-        }
+        // if(quality == 0){
+        //     Serial.printf("Extreme VOCs!\n");
+        //     warningText = "Extreme VOCs!";
+        // }else if(quality == 1){
+        //     Serial.printf("High VOCs\n");
+        //     warningText = "High VOCs.";
+        // } else if (quality == 2){
+        //     Serial.printf("Low VOCs\n");
+        //     warningText = "Low VOCs";
+        // } else if(quality == 3){
+        //     Serial.printf("Clean Air!\n");
+        //     warningText = "Fresh Air!";
+        // }
         Serial.printf("\n");
         if(mqtt.Update()){
             dustPub.publish(concentration);
-            airQualityPub.publish(quality);
-            airQualityText.publish(warningText);
+            // airQualityPub.publish(quality);
+            // airQualityText.publish(warningText);
         }
     }
 
     //PUMP RELAY IS VERY SLOW! NEED TO BE FIXED.
-    if(currentMillis %5000 <= 5){
-        Serial.printf("Moisture Level: %i\n", moistureLevel);
-        Serial.printf("TimeSincePump: %i\n\n", timeSinceLastPump);
-    }
-
+  
     if(timeSinceLastPump > PUMP_ON_TIME){
+        Serial.printf("Time since pump: %i\n", timeSinceLastPump);
         digitalWrite(PUMP_PIN, LOW);
     }
 
-    if(moistureLevel >3000 && timeSinceLastPump > MIN_WATERING_INTERVAL){
+    if(moistureLevel >3000 && timeSinceLastPump > PUMP_TIMEOUT){
         digitalWrite(PUMP_PIN, HIGH);
         lastPumpTime = currentMillis;
     }
 
     MQTT_connect();
-    MQTT_ping();
+    // MQTT_ping();
 
 }
 
@@ -220,4 +218,23 @@ bool MQTT_ping() {
         last = millis();
     }
     return pingStatus;
+}
+
+void getConc(){
+    const int sampleTime = 30000;
+    unsigned int duration, startTime;
+    startTime = 0;
+    lowPulseOccupancy =0;
+    while (true)
+    {
+        duration = pulseIn(DUST_PIN, LOW);
+        lowPulseOccupancy = lowPulseOccupancy + duration;
+        if ((millis()-startTime)>sampleTime){
+            ratio = lowPulseOccupancy/(sampleTime*10);
+            concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2) +520*ratio +0.62;
+            startTime = millis();
+            lowPulseOccupancy=0;
+        }
+    }
+    
 }

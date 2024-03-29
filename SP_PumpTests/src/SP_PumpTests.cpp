@@ -10,12 +10,12 @@
 const int BUTTON_PIN = D2;
 const int PUMP_PIN = D19;
 const int PUMP_ON_TIME = 500;
-const int SOIL_PIN = A0;
+const int SOIL_PIN = A1;
 const int sensorInWater = 1744;     //when sensor is in pure pureWater
 const int sensorInAir = 3485;       //sensor value in air
 const int sensorInWetSoil = 1770;   //sensor value in VERY wet sensor
 const int sensorInDrySoil = 3000;   //sensor value in dry soil
-const int MIN_WATERING_INTERVAL = 10000;    //Minimum time between watering.
+const int MIN_WATERING_INTERVAL = 5000;    //Minimum time between watering.
 
 int currentMillis;
 int lastMillis = -9999;
