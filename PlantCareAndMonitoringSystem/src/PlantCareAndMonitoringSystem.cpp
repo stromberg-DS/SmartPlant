@@ -13,32 +13,48 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include "HX711.h"
+#include "math.h"
 
-//Sensor constants
+//Sensor 
 const int DUST_PIN = 10;
 const int AIR_QUALITY_PIN = A0;
 const int SAMPLE_TIME_MS = 30000;
 const int BME_ADDRESS = 0x76;
 const int SOIL_PIN = A1;
 
-//Display constants
+//Display 
 const int OLED_RESET =-1;
 const int OLED_ADDRESS = 0x3C;
 const int DEGREE_SYMBOL = 0xF8;
 
+//Pump 
 const int PUMP_PIN = D19;
 const int PUMP_ON_TIME = 500;
-const int PUMP_TIMEOUT = 5000;
-
-const int SENSOR_IN_WATER = 1744;     //when sensor is in pure pureWater
-const int SENSOR_IN_AIR = 3485;       //sensor value in air
-const int SENSOR_IN_WET_SOIL = 1770;   //sensor value in VERY wet sensor
-const int SENSOR_IN_DRY_SOIL = 3000;   //sensor value in dry soil
-
-int currentMillis;
+const int PUMP_TIMEOUT = 30000;
 int lastPumpTime = -9999;
 bool isPumpOn = false;
+bool isWebButtonPressed;
+bool isManualPumping = false;
 
+//Moisture 
+const int SENSOR_IN_WATER = 1744;       //when sensor is in pure pureWater
+const int SENSOR_IN_AIR = 3485;         //sensor value in air
+const int SENSOR_IN_WET_SOIL = 1770;    //sensor value in VERY wet soil
+const int SENSOR_IN_DRY_SOIL = 3000;    //sensor value in dry soil
+
+//Scale 
+const float CAL_FACTOR = -478.79;
+const int SAMPLES = 10;
+const float EMPTY_WEIGHT = 130.0;   //No water, pump and cup only
+const float LOW_WEIGHT = 230.0;     //Lowest water level before pump stops working
+const float FULL_WEIGHT = 625.0;    //Full of water. 
+
+//Timing
+int currentMillis;
+int lastDisplayTime = 0;
+
+//Dust/VOC Sensors
 int duration;
 int totalLowTime = 0;
 int lowPulseOccupancy = 0;
@@ -48,41 +64,48 @@ float ratio = 0;
 float concentration = 0;
 String warningText;
 
+//BME
 bool status;
-float tempC;
-float tempF;
-float humidity;
-int lastDisplayTime = 0;
 
-AirQualitySensor sensor(AIR_QUALITY_PIN);
+
 TCPClient TheClient;
 Adafruit_MQTT_SPARK mqtt(&TheClient, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
 Adafruit_MQTT_Publish dustPub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantinfo.dustsensor");
 Adafruit_MQTT_Publish airQualityPub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantinfo.airquality");
 Adafruit_MQTT_Publish airQualityText = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/airqualitywarningtext");
+Adafruit_MQTT_Publish scalePub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/smartscale");
+Adafruit_MQTT_Publish moisturePub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantinfo.soilmoisture");
+Adafruit_MQTT_Subscribe waterButtonFeed = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/buttononoff");
 
+AirQualitySensor sensor(AIR_QUALITY_PIN);
 Adafruit_SSD1306 display(OLED_RESET);
 Adafruit_BME280 bme;
+HX711 myScale(D6, D7);
 
+String DateTime, TimeOnly, Day, MonthDate, Year;
 
 SYSTEM_MODE(AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 
 //functions
-void updateDisplays();
+void updateDisplays(String _airQuality, float _tempF, float _humidity, float _moisturePercent);
 float tempCtoF(float c);
 void MQTT_connect();
 bool MQTT_ping();
 void getConc();
+float mapFloat(float inVal, float minIn, float maxIn, float minOut, float maxOut);
 
 
 void setup() {
     Serial.begin(9600);
-    waitFor(Serial.isConnected, 10000);
+    waitFor(Serial.isConnected, 10000);    
 
     pinMode(PUMP_PIN, OUTPUT);
     digitalWrite(PUMP_PIN, LOW);
     pinMode(SOIL_PIN, INPUT);
+
+    Time.zone(-7);
+    Particle.syncTime();
 
     status = bme.begin(BME_ADDRESS);
     if (status == false){
@@ -95,73 +118,97 @@ void setup() {
     display.setTextSize(1);
     display.display();
 
-  pinMode(DUST_PIN, INPUT);
-  lastSampleTime = millis();
-  new Thread("concThread", getConc);
+    myScale.set_scale();
+    delay(5000);        //let scale settle
+    myScale.tare();
+    myScale.set_scale(CAL_FACTOR);
+
+    mqtt.subscribe(&waterButtonFeed);
+
+    pinMode(DUST_PIN, INPUT);
+    lastSampleTime = millis();
+    new Thread("concThread", getConc);
 }
 
 void loop() {
     currentMillis = millis();
-    // int quality = sensor.slope();
+    float weight;
+    int quality;
+    float waterPercent;
+    float tempC;
+    float tempF;
+    float humidity;
     int moistureLevel = analogRead(SOIL_PIN);
+    int moisturePercent;
     int timeSinceLastPump = currentMillis - lastPumpTime;
 
-    if (millis() - lastDisplayTime > 10000){
+    DateTime = Time.timeStr();
+    MonthDate = DateTime.substring(4, 10);
+    TimeOnly =  DateTime.substring(11, 19);
+    Day = DateTime.substring(0,3);
+
+    //update Sensors/display
+    // if (millis() - lastDisplayTime > 3000){
+        moisturePercent = map(moistureLevel, SENSOR_IN_DRY_SOIL, SENSOR_IN_WET_SOIL, 0, 100);
+        quality = sensor.slope();
+        weight = constrain(myScale.get_units(SAMPLES), 0, 5000);
+        waterPercent = constrain(mapFloat(weight, LOW_WEIGHT, FULL_WEIGHT, 0, 100), 0, 110);
         tempF = tempCtoF(bme.readTemperature());
         humidity = bme.readHumidity();
-        updateDisplays();
+        if(millis() - lastDisplayTime > 30000){
+        updateDisplays(warningText, tempF, humidity, moisturePercent);
+        // Serial.printf("Moisture: %i\n", moistureLevel);
+        // Serial.printf("Moist Percent: %i\n", moisturePercent);
         lastDisplayTime = millis();
     }
 
-    //pulseIN is slowing me down!!! I need threading for this function!!!!
-    ///////////////////////////
 
-
-    if(millis()-lastSampleTime > SAMPLE_TIME_MS){
-        // if(totalLowTime == 0){
-        // totalLowTime = lastLowTime;
-        // } else{
-        // lastLowTime = totalLowTime;
-        // }
-
-        Serial.printf("Dust Concentration: %0.2f\n", concentration);
-        lastSampleTime = millis();
-
-        // if(quality == 0){
-        //     Serial.printf("Extreme VOCs!\n");
-        //     warningText = "Extreme VOCs!";
-        // }else if(quality == 1){
-        //     Serial.printf("High VOCs\n");
-        //     warningText = "High VOCs.";
-        // } else if (quality == 2){
-        //     Serial.printf("Low VOCs\n");
-        //     warningText = "Low VOCs";
-        // } else if(quality == 3){
-        //     Serial.printf("Clean Air!\n");
-        //     warningText = "Fresh Air!";
-        // }
-        Serial.printf("\n");
-        if(mqtt.Update()){
-            dustPub.publish(concentration);
-            // airQualityPub.publish(quality);
-            // airQualityText.publish(warningText);
+    Adafruit_MQTT_Subscribe *subscription;
+    while ((subscription = mqtt.readSubscription(100))){
+        if(subscription == &waterButtonFeed){
+            //atof: ascii to float
+            //char * turns binary into characters
+            isWebButtonPressed = bool(atof((char *)waterButtonFeed.lastread));
         }
     }
 
-    //PUMP RELAY IS VERY SLOW! NEED TO BE FIXED.
+
+    if(millis()-lastSampleTime > SAMPLE_TIME_MS){
+        Serial.printf("Dust Concentration: %0.2f\n", concentration);
+        lastSampleTime = millis();
+
+        if(quality == 0){
+            warningText = "Extreme VOCs!";
+        }else if(quality == 1){
+            warningText = "High VOCs.";
+        } else if (quality == 2){
+            warningText = "Low VOCs";
+        } else if(quality == 3){
+            warningText = "Fresh Air!";
+        }
+
+        if(mqtt.Update()){
+            scalePub.publish(waterPercent); 
+            dustPub.publish(concentration);
+            moisturePub.publish(moisturePercent);
+            // airQualityPub.publish(quality);
+            airQualityText.publish(warningText);
+            Serial.printf("Water Percent: %i\n", waterPercent);
+            Serial.printf("Moist Percent: %i\n\n", moisturePercent);
+        }
+    }
   
     if(timeSinceLastPump > PUMP_ON_TIME){
-        Serial.printf("Time since pump: %i\n", timeSinceLastPump);
         digitalWrite(PUMP_PIN, LOW);
     }
 
-    if(moistureLevel >3000 && timeSinceLastPump > PUMP_TIMEOUT){
+    if((moistureLevel >SENSOR_IN_DRY_SOIL && timeSinceLastPump > PUMP_TIMEOUT) || isWebButtonPressed){
         digitalWrite(PUMP_PIN, HIGH);
         lastPumpTime = currentMillis;
     }
 
     MQTT_connect();
-    // MQTT_ping();
+    MQTT_ping();
 
 }
 
@@ -170,14 +217,21 @@ float tempCtoF(float c){
     return ((c*9/5)+32);
 }
 
+float mapFloat(float inVal, float minIn, float maxIn, float minOut, float maxOut){
+    return (inVal-minIn)*(maxOut-minOut)/(maxIn-minIn) + minOut;
+}
 
 //Update all local displays at once
-void updateDisplays(){
+void updateDisplays(String _airQuality, float _tempF, float _humidity, float _moisturePercent){
     // Serial.printf("Temperature: %0.1fF\n\n", tempF);
     display.clearDisplay();
     display.setCursor(0,0);
-    display.printf("Temp: %0.1f%cF\n\n", tempF, DEGREE_SYMBOL);
-    display.printf("Humidity: %0.1f%%", humidity);
+    display.setTextSize(2);
+    display.printf("%0.0f%cF %0.0f%%\n", _tempF, DEGREE_SYMBOL, _humidity);
+    display.setTextSize(1);
+    display.printf("\nSoil: %0.0f%%\n", _moisturePercent);
+    display.printf("Dust: %0.0f\n%s\n\n", concentration, _airQuality.c_str());
+    display.printf("%s, %s %s\n", Day.c_str(), MonthDate.c_str(), TimeOnly.c_str());
     display.display();
 }
 
@@ -230,6 +284,12 @@ void getConc(){
         duration = pulseIn(DUST_PIN, LOW);
         lowPulseOccupancy = lowPulseOccupancy + duration;
         if ((millis()-startTime)>sampleTime){
+            if(totalLowTime == 0){
+                totalLowTime = lastLowTime;
+            } else{
+                lastLowTime = totalLowTime;
+            }
+
             ratio = lowPulseOccupancy/(sampleTime*10);
             concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2) +520*ratio +0.62;
             startTime = millis();

@@ -27,7 +27,7 @@ int lastPublishTime = -99999;
 
 //weights
 const float EMPTY_WEIGHT = 130.0; //Completely empy cup with pump
-const float LOW_WEIGHT = 200; //NEED TO TEST HOW FAR PUMP WILL GO
+const float LOW_WEIGHT = 230; //Lowest before pump stops working
 const float FULL_WEIGHT = 625.0; //Completely full with pump
 
 //functions
