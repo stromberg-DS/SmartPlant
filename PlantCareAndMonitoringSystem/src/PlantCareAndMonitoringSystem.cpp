@@ -193,7 +193,7 @@ void loop() {
             moisturePub.publish(moisturePercent);
             // airQualityPub.publish(quality);
             airQualityText.publish(warningText);
-            Serial.printf("Water Percent: %i\n", waterPercent);
+            Serial.printf("Water Percent: %f\n", waterPercent);
             Serial.printf("Moist Percent: %i\n\n", moisturePercent);
         }
     }
