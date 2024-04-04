@@ -71,8 +71,9 @@ bool status;
 TCPClient TheClient;
 Adafruit_MQTT_SPARK mqtt(&TheClient, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
 Adafruit_MQTT_Publish dustPub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantinfo.dustsensor");
-Adafruit_MQTT_Publish airQualityPub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantinfo.airquality");
 Adafruit_MQTT_Publish airQualityText = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/airqualitywarningtext");
+Adafruit_MQTT_Publish tempPub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature");
+Adafruit_MQTT_Publish humidityPub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantinfo.humidity");
 Adafruit_MQTT_Publish scalePub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/smartscale");
 Adafruit_MQTT_Publish moisturePub = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantinfo.soilmoisture");
 Adafruit_MQTT_Subscribe waterButtonFeed = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/buttononoff");
@@ -105,6 +106,7 @@ void setup() {
     pinMode(SOIL_PIN, INPUT);
 
     Time.zone(-7);
+    Time.beginDST();
     Particle.syncTime();
 
     status = bme.begin(BME_ADDRESS);
@@ -191,7 +193,8 @@ void loop() {
             scalePub.publish(waterPercent); 
             dustPub.publish(concentration);
             moisturePub.publish(moisturePercent);
-            // airQualityPub.publish(quality);
+            tempPub.publish(tempF);
+            humidityPub.publish(humidity);
             airQualityText.publish(warningText);
             Serial.printf("Water Percent: %f\n", waterPercent);
             Serial.printf("Moist Percent: %i\n\n", moisturePercent);
