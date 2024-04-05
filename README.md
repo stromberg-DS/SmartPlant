@@ -4,7 +4,7 @@ This is a smart plant system that monitors air quality, temperature, humidity, a
 
 The project runs on a Particle Photon 2 which was programmed in C++ in VS Code. Install the Particle Workbench to VS Code to edit any code here.
 
-##Directory
+## Directory
 
 **PlantCareAndMonitoringSystem** - This is the main project folder. The final code, wiring diagrams, and other important info is in this folder.
 
