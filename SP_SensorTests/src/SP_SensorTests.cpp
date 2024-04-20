@@ -89,14 +89,15 @@ void loop() {
   int timeSinceDisplay = millis() - lastDisplayTime;
 
   
-  Serial.printf("timeSinceDisplay: %i\n", timeSinceDisplay);
-  Serial.printf("lastDisplayTime: %i\n\n", lastDisplayTime);
+  // Serial.printf("timeSinceDisplay: %i\n", timeSinceDisplay);
+  // Serial.printf("lastDisplayTime: %i\n\n", lastDisplayTime);
   
-  if (timeSinceDisplay > 5000){
+  if (timeSinceDisplay > 1000){
     tempC = bme.readTemperature();
     tempF = tempCtoF(tempC);
     humidity = bme.readHumidity();
     updateDisplays();
+    Serial.printf("Dust Concentration: %0.2f\n", concentration);
     lastDisplayTime = millis();
   }
 

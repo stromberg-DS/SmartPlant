@@ -41,7 +41,7 @@ bool isManualPumping = false;
 const int SENSOR_IN_WATER = 1744;       //when sensor is in pure pureWater
 const int SENSOR_IN_AIR = 3485;         //sensor value in air
 const int SENSOR_IN_WET_SOIL = 1770;    //sensor value in VERY wet soil
-const int SENSOR_IN_DRY_SOIL = 3000;    //sensor value in dry soil
+const int SENSOR_IN_DRY_SOIL = 3500;    //sensor value in dry soil
 
 //Scale 
 const float CAL_FACTOR = -478.79;
@@ -55,6 +55,7 @@ int currentMillis;
 int lastDisplayTime = 0;
 
 //Dust/VOC Sensors
+const int SAMPLE_TIME = 30000;
 int duration;
 int totalLowTime = 0;
 int lowPulseOccupancy = 0;
@@ -99,7 +100,8 @@ float mapFloat(float inVal, float minIn, float maxIn, float minOut, float maxOut
 
 void setup() {
     Serial.begin(9600);
-    waitFor(Serial.isConnected, 10000);    
+    waitFor(Serial.isConnected, 10000);
+    new Thread("concThread", getConc); 
 
     pinMode(PUMP_PIN, OUTPUT);
     digitalWrite(PUMP_PIN, LOW);
@@ -129,7 +131,7 @@ void setup() {
 
     pinMode(DUST_PIN, INPUT);
     lastSampleTime = millis();
-    new Thread("concThread", getConc);
+    
 }
 
 void loop() {
@@ -150,19 +152,18 @@ void loop() {
     Day = DateTime.substring(0,3);
 
     //update Sensors/display
-    // if (millis() - lastDisplayTime > 3000){
-        moisturePercent = map(moistureLevel, SENSOR_IN_DRY_SOIL, SENSOR_IN_WET_SOIL, 0, 100);
-        quality = sensor.slope();
-        weight = constrain(myScale.get_units(SAMPLES), 0, 5000);
-        waterPercent = constrain(mapFloat(weight, LOW_WEIGHT, FULL_WEIGHT, 0, 100), 0, 110);
-        tempF = tempCtoF(bme.readTemperature());
-        humidity = bme.readHumidity();
-        if(millis() - lastDisplayTime > 30000){
+    moisturePercent = constrain(map(moistureLevel, SENSOR_IN_DRY_SOIL, SENSOR_IN_WET_SOIL, 0, 100),0,100);
+    quality = sensor.slope();
+    weight = constrain(myScale.get_units(SAMPLES), 0, 5000);
+    waterPercent = constrain(mapFloat(weight, LOW_WEIGHT, FULL_WEIGHT, 0, 100), 0, 110);
+    tempF = tempCtoF(bme.readTemperature());
+    humidity = bme.readHumidity();
+    if(millis() - lastDisplayTime > 3000){
         updateDisplays(warningText, tempF, humidity, moisturePercent);
-        // Serial.printf("Moisture: %i\n", moistureLevel);
-        // Serial.printf("Moist Percent: %i\n", moisturePercent);
+        Serial.printf("Moisture: %i\n", moistureLevel);
+        Serial.printf("Moist Percent: %i\n", moisturePercent);
         lastDisplayTime = millis();
-    }
+    }   
 
 
     Adafruit_MQTT_Subscribe *subscription;
@@ -278,23 +279,23 @@ bool MQTT_ping() {
 }
 
 void getConc(){
-    const int sampleTime = 30000;
     unsigned int duration, startTime;
     startTime = 0;
     lowPulseOccupancy =0;
+
     while (true)
     {
         duration = pulseIn(DUST_PIN, LOW);
         lowPulseOccupancy = lowPulseOccupancy + duration;
-        if ((millis()-startTime)>sampleTime){
-            if(totalLowTime == 0){
-                totalLowTime = lastLowTime;
-            } else{
-                lastLowTime = totalLowTime;
-            }
+        if ((millis()-startTime)>SAMPLE_TIME){
+            // if(totalLowTime == 0){
+            //     totalLowTime = lastLowTime;
+            // } else{
+            //     lastLowTime = totalLowTime;
+            // }
 
-            ratio = lowPulseOccupancy/(sampleTime*10);
-            concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2) +520*ratio +0.62;
+            ratio = lowPulseOccupancy/(SAMPLE_TIME*10.0);
+            concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2)+520*ratio +0.62;
             startTime = millis();
             lowPulseOccupancy=0;
         }
