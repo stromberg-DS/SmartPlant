@@ -42,7 +42,7 @@ const int SENSOR_IN_WATER = 1744;       //when sensor is in pure pureWater
 const int SENSOR_IN_AIR = 3485;         //sensor value in air
 const int SENSOR_IN_WET_SOIL = 1770;    //sensor value in VERY wet soil
 const int SENSOR_IN_DRY_SOIL = 3500;    //sensor value in dry soil
-const int TIME_TO_WATER_PERCENT = 20;
+const int TIME_TO_WATER_PERCENT = 30;   //20 was a bit too low
 
 //Scale 
 const float CAL_FACTOR = -478.79;
@@ -289,11 +289,11 @@ void getConc(){
         duration = pulseIn(DUST_PIN, LOW);
         lowPulseOccupancy = lowPulseOccupancy + duration;
         if ((millis()-startTime)>SAMPLE_TIME){
-            // if(totalLowTime == 0){
-            //     totalLowTime = lastLowTime;
-            // } else{
-            //     lastLowTime = totalLowTime;
-            // }
+            if(totalLowTime == 0){
+                totalLowTime = lastLowTime;
+            } else{
+                lastLowTime = totalLowTime;
+            }
 
             ratio = lowPulseOccupancy/(SAMPLE_TIME*10.0);
             concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2)+520*ratio +0.62;
