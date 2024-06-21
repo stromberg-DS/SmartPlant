@@ -289,11 +289,11 @@ void getConc(){
         duration = pulseIn(DUST_PIN, LOW);
         lowPulseOccupancy = lowPulseOccupancy + duration;
         if ((millis()-startTime)>SAMPLE_TIME){
-            // if(totalLowTime == 0){
-            //     totalLowTime = lastLowTime;
-            // } else{
-            //     lastLowTime = totalLowTime;
-            // }
+            if(totalLowTime == 0){
+                totalLowTime = lastLowTime;
+            } else{
+                lastLowTime = totalLowTime;
+            }
 
             ratio = lowPulseOccupancy/(SAMPLE_TIME*10.0);
             concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2)+520*ratio +0.62;
