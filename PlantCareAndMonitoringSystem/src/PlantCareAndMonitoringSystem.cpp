@@ -31,7 +31,7 @@ const int DEGREE_SYMBOL = 0xF8;
 //Pump 
 const int PUMP_PIN = D19;
 const int PUMP_ON_TIME = 500;
-const int PUMP_TIMEOUT = 60000;
+const int PUMP_TIMEOUT = 1800000;       //30 minutes
 int lastPumpTime = -9999;
 bool isPumpOn = false;
 bool isWebButtonPressed;
@@ -42,7 +42,7 @@ const int SENSOR_IN_WATER = 1744;       //when sensor is in pure pureWater
 const int SENSOR_IN_AIR = 3485;         //sensor value in air
 const int SENSOR_IN_WET_SOIL = 1770;    //sensor value in VERY wet soil
 const int SENSOR_IN_DRY_SOIL = 3500;    //sensor value in dry soil
-const int TIME_TO_WATER_PERCENT = 20;
+const int TIME_TO_WATER_PERCENT = 40;
 
 //Scale 
 const float CAL_FACTOR = -478.79;
