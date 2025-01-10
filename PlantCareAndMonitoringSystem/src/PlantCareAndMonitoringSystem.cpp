@@ -211,16 +211,9 @@ void loop() {
         digitalWrite(PUMP_PIN, LOW);
     }
 
-    if(waterPercent>5){     //Check if there's water before pumping
-        if(RGB.controlled()) RGB.control(false);    //resume normal LED function if there is water
-
-        if((moisturePercent<TIME_TO_WATER_PERCENT && timeSinceLastPump > PUMP_TIMEOUT) || isWebButtonPressed){
-            digitalWrite(PUMP_PIN, HIGH);
-            lastPumpTime = currentMillis;
-        }
-    } else{
-        if(!RGB.controlled()) RGB.control(true);    //take over LED if there's no water and if we don't already have control.
-        RGB.color(255,0,0);                         //set LED to red
+    if((moisturePercent<TIME_TO_WATER_PERCENT && timeSinceLastPump > PUMP_TIMEOUT) || isWebButtonPressed){
+        digitalWrite(PUMP_PIN, HIGH);
+        lastPumpTime = currentMillis;
     }
 
     MQTT_connect();
