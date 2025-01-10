@@ -303,3 +303,11 @@ void getConc(){
     }
     
 }
+
+
+//Put Photon2 to sleep for 30 minutes
+void sleep(){
+    SystemSleepConfiguration config;
+    config.mode(SystemSleepMode::STOP).gpio(WKP, RISING).duration(30min);
+    System.sleep(config);
+}
