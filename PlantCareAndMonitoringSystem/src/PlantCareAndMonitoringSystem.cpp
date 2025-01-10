@@ -97,7 +97,6 @@ void MQTT_connect();
 bool MQTT_ping();
 void getConc();
 float mapFloat(float inVal, float minIn, float maxIn, float minOut, float maxOut);
-void sleep();
 
 
 void setup() {
@@ -141,32 +140,29 @@ void loop() {
     float weight;
     int quality;
     float waterPercent;
+    float tempC;
     float tempF;
     float humidity;
-    int moistureLevel;
+    int moistureLevel = analogRead(SOIL_PIN);
     int moisturePercent;
     int timeSinceLastPump = currentMillis - lastPumpTime;
 
+    DateTime = Time.timeStr();
+    MonthDate = DateTime.substring(4, 10);
+    TimeOnly =  DateTime.substring(11, 19);
+    Day = DateTime.substring(0,3);
 
-
-    //update Sensors/display every 5 sec
-    if(millis() - lastDisplayTime > 5000){
-        DateTime = Time.timeStr();
-        MonthDate = DateTime.substring(4, 10);
-        TimeOnly =  DateTime.substring(11, 19);
-        Day = DateTime.substring(0,3);
-
-        moistureLevel = analogRead(SOIL_PIN);
-        moisturePercent = constrain(map(moistureLevel, SENSOR_IN_DRY_SOIL, SENSOR_IN_WET_SOIL, 0, 100),0,100);
-        quality = sensor.slope();
-        weight = constrain(myScale.get_units(SAMPLES), 0, 5000);
-        waterPercent = constrain(mapFloat(weight, LOW_WEIGHT, FULL_WEIGHT, 0, 100), 0, 110);
-        tempF = tempCtoF(bme.readTemperature());
-        humidity = bme.readHumidity();
-
+    //update Sensors/display
+    moisturePercent = constrain(map(moistureLevel, SENSOR_IN_DRY_SOIL, SENSOR_IN_WET_SOIL, 0, 100),0,100);
+    quality = sensor.slope();
+    weight = constrain(myScale.get_units(SAMPLES), 0, 5000);
+    waterPercent = constrain(mapFloat(weight, LOW_WEIGHT, FULL_WEIGHT, 0, 100), 0, 110);
+    tempF = tempCtoF(bme.readTemperature());
+    humidity = bme.readHumidity();
+    if(millis() - lastDisplayTime > 3000){
         updateDisplays(warningText, tempF, humidity, moisturePercent);
-        // Serial.printf("Moisture: %i\n", moistureLevel);
-        // Serial.printf("Moist Percent: %i\n", moisturePercent);
+        Serial.printf("Moisture: %i\n", moistureLevel);
+        Serial.printf("Moist Percent: %i\n", moisturePercent);
         lastDisplayTime = millis();
     }   
 
@@ -182,7 +178,7 @@ void loop() {
 
 
     if(millis()-lastSampleTime > SAMPLE_TIME_MS){
-        // Serial.printf("Dust Concentration: %0.2f\n", concentration);
+        Serial.printf("Dust Concentration: %0.2f\n", concentration);
         lastSampleTime = millis();
 
         if(quality == 0){
@@ -202,8 +198,8 @@ void loop() {
             tempPub.publish(tempF);
             humidityPub.publish(humidity);
             airQualityText.publish(warningText);
-            // Serial.printf("Water Percent: %f\n", waterPercent);
-            // Serial.printf("Moist Percent: %i\n\n", moisturePercent);
+            Serial.printf("Water Percent: %f\n", waterPercent);
+            Serial.printf("Moist Percent: %i\n\n", moisturePercent);
         }
     }
   
@@ -306,11 +302,4 @@ void getConc(){
         }
     }
     
-}
-
-//Put Photon2 to sleep for 30 minutes
-void sleep(){
-    SystemSleepConfiguration config;
-    config.mode(SystemSleepMode::STOP).gpio(WKP, RISING).duration(30min);
-    System.sleep(config);
 }
